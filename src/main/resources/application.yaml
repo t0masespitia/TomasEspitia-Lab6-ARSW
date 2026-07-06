@@ -21,3 +21,5 @@ logging:
   level: 
     root: INFO 
     edu.eci.arsw.observability: DEBUG
+  file: 
+    name: logs/observability-demo.log
