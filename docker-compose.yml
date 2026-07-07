@@ -15,6 +15,8 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
       - loki
@@ -37,3 +39,5 @@ services:
     command: -config.file=/etc/promtail/config.yml
     depends_on:
       - loki
+volumes:
+  grafana-data:

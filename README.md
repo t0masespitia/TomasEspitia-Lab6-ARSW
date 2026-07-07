@@ -270,3 +270,33 @@ Todas las consultas se ejecutaron en la pestaña **Explore** de Grafana, con Lok
 - **Métrica que evidencia actividad de negocio:** `orders_total` (Panel 5), que pasó de 0 a 5
 - **Log que permite rastrear un pedido específico:** "Pedido creado correctamente. orderId=ORD-\<uuid\>", ya que cada log incluye el identificador único del pedido
 - **Información adicional que agregaría para mejorar trazabilidad:** un `correlationId` o `traceId` compartido entre todos los logs que pertenecen a una misma solicitud HTTP (hoy cada línea es independiente y solo se puede correlacionar por el `orderId` una vez que este ya fue generado). También agregaría el `customerId` como campo estructurado (no solo texto libre) para poder filtrar por cliente en Loki usando labels en vez de búsquedas de texto
+
+## 10. Alertas configuradas en Grafana
+ 
+Se configuraron las 3 alertas que propone la guía, sobre el datasource Prometheus, agrupadas en la carpeta `arssw`. Cada una fue verificada en dos estados: **Normal** (sistema sano) y **Firing** (provocando el escenario a propósito), para confirmar que la lógica de la condición realmente reacciona al problema que busca detectar y no solo se guardó "a ciegas".
+ 
+| Alerta | Consulta PromQL | Condición | Verificación |
+|---|---|---|---|
+| Servicio caído | `up{job="observability-demo"}` | `IS BELOW 1` | Verificada en **Normal** con `up = 1` (servicio arriba) |
+| Errores HTTP 500 | `sum(rate(http_server_requests_seconds_count{status="500"}[1m]))` | `IS ABOVE 0` | Verificada en **Firing** con valor `0.072056`, provocado con `/orders/simulate-error` |
+| Latencia elevada | `sum(rate(http_server_requests_seconds_sum[1m])) / sum(rate(http_server_requests_seconds_count[1m]))` | `IS ABOVE 1` | Verificada en **Firing** con valor `1.16189`, provocado con 5 llamadas seguidas a `/orders/simulate-latency` |
+
+ 
+![alt text](imagenes/20.png)
+![alt text](imagenes/21.png)
+![alt text](imagenes/22.png)
+![alt text](imagenes/23.png)
+
+ 
+## 11. OpenTelemetry y trazas distribuidas (conceptual)
+ 
+Este laboratorio cubre dos de las tres señales de observabilidad de forma práctica: **métricas** (Micrometer + Prometheus) y **logs** (Logback + Loki). La tercera señal, **trazas**, se aborda aquí solo a nivel conceptual, siguiendo lo que propone la guía.
+ 
+**OpenTelemetry** es un estándar abierto (vendor-neutral) para generar y exportar telemetría — métricas, logs y trazas — sin atar la instrumentación del código a un proveedor específico de observabilidad. Provee APIs, SDKs y un *Collector* que permite instrumentar una vez y exportar hacia distintos backends (Prometheus, Jaeger, Tempo, Datadog, etc.) sin reescribir el código de instrumentación.
+ 
+**¿Qué aportaría una traza que una métrica o un log no dan?**
+ 
+- Una **métrica** dice: *"la latencia aumentó"* (esto se ve en el Panel 3 del dashboard).
+- Un **log** dice: *"el endpoint `/orders/simulate-latency` tardó 2400 ms"* (esto se ve en los logs `WARN` de la sección 8.3).
+- Una **traza** mostraría el recorrido completo de una solicitud entre servicios, por ejemplo: `API Gateway → Order Service → Payment Service`, señalando en cuál de esos saltos ocurrió el mayor tiempo o el error.
+**Por qué no se implementó en este laboratorio:** `observability-demo` es un único microservicio, sin llamadas salientes a otros servicios — no existe un recorrido distribuido real que trazar, por lo que agregar el OpenTelemetry Collector y un backend de trazas (como Jaeger o Tempo) no aportaría evidencia adicional en este caso puntual. Donde sí tendría sentido aplicar trazas distribuidas es en un sistema con múltiples microservicios que se llaman entre sí — como el proyecto de curso PixelPlatform (`api-gateway`, `auth-service`, `canvas-service`, `chat-service`, `signaling-service`, `ai-service`, `observability-service`), donde una sola solicitud sí atraviesa varios servicios y una traza permitiría identificar en cuál de ellos se concentra la latencia o el error.
